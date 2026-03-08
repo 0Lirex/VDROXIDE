@@ -22718,70 +22718,119 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             end
 
             local function monitorPlayer(player)
-                if player_monitor_connections[player] then
-                    for _, conn in pairs(player_monitor_connections[player]) do
-                        conn:Disconnect()
-                    end
-                end
-                player_monitor_connections[player] = {}
+    if player_monitor_connections[player] then
+        for _, conn in pairs(player_monitor_connections[player]) do
+            conn:Disconnect()
+        end
+    end
+    player_monitor_connections[player] = {}
 
-                player_monitor_connections[player].characterAdded = utility:Connection(player.CharacterAdded, function(character)
-                    task.wait(2)
-
-                    if player_monitor_connections[player] and player_monitor_connections[player].characterChildAdded then
-                        player_monitor_connections[player].characterChildAdded:Disconnect()
-                    end
-
-                    if character and player_monitor_connections[player] and utility then
-                        player_monitor_connections[player].characterChildAdded = utility:Connection(character.ChildAdded, function(child)
-                            if child:IsA("Tool") then
-                                task.wait(2)
-                                updatePlayerLabels(player)
-                            end
-                        end)
-                    end
-
-                    updatePlayerLabels(player)
-                end)
-
-                player_monitor_connections[player].characterRemoving = utility:Connection(player.CharacterRemoving, function()
-                    task.wait(0.1)
-                    updatePlayerLabels(player)
-                end)
-
-                if FindFirstChild(player, "Backpack") then
-                    player_monitor_connections[player].backpackAdded = utility:Connection(player.Backpack.ChildAdded, function()
-                        task.wait(1)
-                        updatePlayerLabels(player)
-                    end)
-                end
-
-                if game.PlaceId == 5208655184 then
-                    player_monitor_connections[player].maxEdictAttr = utility:Connection(player:GetAttributeChangedSignal("MaxEdict"), function()
-                        updatePlayerLabels(player)
-                    end)
-                end
-
-                if player.Character then
-                    player_monitor_connections[player].characterChildAdded = utility:Connection(player.Character.ChildAdded, function(child)
-                        if child:IsA("Tool") then
-                            task.wait(2)
-                            updatePlayerLabels(player)
-                        end
-                    end)
-                end
+    
+    local function checkObserveChange()
+        local hasObserve = hasObserveTool(player)
+        local previous = observeState[player]
+        if previous == nil then
+            observeState[player] = hasObserve
+            return
+        end
+        if hasObserve ~= previous then
+            observeState[player] = hasObserve
+            local name = cheat_client:get_name(player) or player.Name
+            if hasObserve then
+                library:Notify({
+                    Title = "👁️ Observe Equipped",
+                    Description = name .. " is now observing",
+                    Time = 3
+                })
+            else
+                library:Notify({
+                    Title = "👁️ Observe Unequipped",
+                    Description = name .. " stopped observing",
+                    Time = 3
+                })
             end
+        end
+    end
+
+    
+    local function delayedCheck()
+        task.wait(0.1)
+        checkObserveChange()
+    end
+
+    
+    player_monitor_connections[player].characterAdded = utility:Connection(player.CharacterAdded, function(character)
+        task.wait(2)   
+        
+        if player_monitor_connections[player] and player_monitor_connections[player].characterChildAdded then
+            player_monitor_connections[player].characterChildAdded:Disconnect()
+        end
+        if character and player_monitor_connections[player] and utility then
+            player_monitor_connections[player].characterChildAdded = utility:Connection(character.ChildAdded, function(child)
+                if child:IsA("Tool") then
+                    task.wait(2)
+                    updatePlayerLabels(player)
+                end
+            end)
+        end
+        updatePlayerLabels(player)
+        -- New observe check
+        delayedCheck()
+    end)
+
+    
+    player_monitor_connections[player].characterRemoving = utility:Connection(player.CharacterRemoving, function()
+        task.wait(0.1)
+        updatePlayerLabels(player)
+        -- New observe check
+        checkObserveChange()
+    end)
+
+    
+    if FindFirstChild(player, "Backpack") then
+        player_monitor_connections[player].backpackAdded = utility:Connection(player.Backpack.ChildAdded, function()
+            task.wait(1)
+            updatePlayerLabels(player)
+            delayedCheck()
+        end)
+    end
+
+    
+    if game.PlaceId == 5208655184 then
+        player_monitor_connections[player].maxEdictAttr = utility:Connection(player:GetAttributeChangedSignal("MaxEdict"), function()
+            updatePlayerLabels(player)
+        end)
+    end
+
+    
+    if player.Character then
+        player_monitor_connections[player].characterChildAdded = utility:Connection(player.Character.ChildAdded, function(child)
+            if child:IsA("Tool") then
+                task.wait(2)
+                updatePlayerLabels(player)
+                delayedCheck()
+            end
+        end)
+    end
+
+    
+    task.spawn(function()
+        task.wait(0.5)
+        checkObserveChange()
+    end)
+end
 
             local function disconnectPlayerMonitor(player)
-                if player_monitor_connections[player] then
-                    for _, conn in pairs(player_monitor_connections[player]) do
-                        if conn and conn.Connected then
-                            conn:Disconnect()
-                        end
-                    end
-                    player_monitor_connections[player] = nil
-                end
+    if player_monitor_connections[player] then
+        for _, conn in pairs(player_monitor_connections[player]) do
+            if conn and conn.Connected then
+                conn:Disconnect()
             end
+        end
+        player_monitor_connections[player] = nil
+    end
+    observeState[player] = nil  
+end
 
             for _, player in ipairs(plrs:GetPlayers()) do
                 monitorPlayer(player)
